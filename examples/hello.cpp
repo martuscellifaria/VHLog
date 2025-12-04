@@ -1,8 +1,4 @@
 #include "../include/VHLog.h"
-#include <iostream>
-
-void init();
-
 
 int main() {
     VHLogger vladoLog = VHLogger();
