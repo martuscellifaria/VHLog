@@ -88,20 +88,3 @@ private:
     VHLogSinkType m_sinkType;
 
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
