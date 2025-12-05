@@ -7,6 +7,7 @@
 #include <memory>
 #include <deque>
 #include <thread>
+#include <set>
 #include <condition_variable>
 #include <utility>
 #include <type_traits>
@@ -41,12 +42,14 @@ enum class VHLogLevel {
     DEBUGLV,
     INFOLV,
     WARNINGLV,
-    ERRORLV
+    ERRORLV,
+    FATALLV
 };
 
 enum class VHLogSinkType {
     ConsoleSink,
-    FileSink
+    FileSink,
+    NullSink
 };
 
 class VHLogger {
@@ -59,7 +62,7 @@ public:
         return nfLogger;
     }
 
-    void setLogOptions(VHLogSinkType sinkType = VHLogSinkType::ConsoleSink,
+    void addLogSink(VHLogSinkType sinkType = VHLogSinkType::ConsoleSink,
             const std::string& sBasePathAndName = "",
             std::size_t iMaxSize = 1024 * 1024);
 
@@ -67,8 +70,9 @@ public:
 
 private:
     void writeToDestination(VHLogLevel level, const std::string& sMessage);
-    std::string getCurrentTime();
-    std::string getCurrentDate();
+    void appendNewSink(VHLogSinkType newSink) { m_sSinkTypes.insert(newSink); }
+    
+    std::string getCurrentDateTime();
     std::string levelToString(VHLogLevel level);
     bool shouldRotate(std::size_t iMessageSize);
 
@@ -85,6 +89,5 @@ private:
     std::size_t m_iMaxSize;
     std::size_t m_iCurrentSize;
     std::string m_sCurrentDate;
-    VHLogSinkType m_sinkType;
-
+    std::set<VHLogSinkType> m_sSinkTypes;
 };

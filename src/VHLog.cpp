@@ -48,13 +48,13 @@ void VHLogger::loggerWorker() {
     }
 }
 
-void VHLogger::setLogOptions(VHLogSinkType sinkType, const std::string& sBasePathAndName, std::size_t iMaxSize) {
+void VHLogger::addLogSink(VHLogSinkType sinkType, const std::string& sBasePathAndName, std::size_t iMaxSize) {
     std::lock_guard<std::mutex> lock(m_mMutex);
-    m_sinkType = sinkType;
-    if (m_sinkType == VHLogSinkType::ConsoleSink) {
+    appendNewSink(sinkType);
+    if (sinkType == VHLogSinkType::ConsoleSink || sinkType == VHLogSinkType::NullSink) {
         return;
     }
-    else if (m_sinkType == VHLogSinkType::FileSink) {
+    else if (sinkType == VHLogSinkType::FileSink) {
         if (m_sBasePathAndName == "") {
             m_sBasePathAndName = sBasePathAndName;
         }
@@ -63,20 +63,12 @@ void VHLogger::setLogOptions(VHLogSinkType sinkType, const std::string& sBasePat
         }
         m_iMaxSize = iMaxSize;
         m_iCurrentSize = 0;
-        m_sCurrentDate = getCurrentDate();
-        auto now = std::chrono::system_clock::now();
-        std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-        std::tm tm{};
-#ifdef _WIN32
-        localtime_s(&now_c, &tm):
-#else
-        localtime_r(&now_c, &tm);
-#endif
-        char buffer[20];
-        std::strftime(buffer, sizeof(buffer), "%Y-%m-%d_%H-%M", &tm);
-        std::string strBuff = buffer;
 
-        std::string fileName = VHGlobalFormat(m_sBasePathAndName, "_", strBuff, ".log");
+        std::string currentDateTime = getCurrentDateTime();
+        m_sCurrentDate = currentDateTime.substr(0, currentDateTime.find('_'));
+        std::string timeForFileName = currentDateTime.substr(0, currentDateTime.find(':'));
+        
+        std::string fileName = VHGlobalFormat(m_sBasePathAndName, "_", timeForFileName, ".log");
         m_fFile.open(fileName, std::ios::app);
         if (!m_fFile) {
             std::cerr << "Failed to open/create log file: " << fileName << '\n';
@@ -94,35 +86,38 @@ void VHLogger::log(VHLogLevel level, std::string sMessage) {
 }
 
 void VHLogger::writeToDestination(VHLogLevel level, const std::string& sMessage) {
-    if (m_sinkType == VHLogSinkType::FileSink) {
-        if (!m_fFile.is_open()) {
-            std::cerr << "Logfile is not open. Won't write." << '\n';
-            return;
-        }
-
-        if (shouldRotate(sMessage.size())) {
-            setLogOptions(m_sinkType, m_sBasePathAndName, m_iMaxSize);
-        }
-    }
-
-    std::string timestamp = getCurrentTime();
+    std::string timestamp = getCurrentDateTime();
     std::string levelString = levelToString(level);
-
     std::string composedMessage = VHGlobalFormat("[", timestamp, "] [", levelString, "] ", sMessage, "\n");
-
-    if (m_sinkType == VHLogSinkType::FileSink) {
-        if (m_fFile) {
-            m_fFile << composedMessage;
-            m_iCurrentSize += (composedMessage.size() + 1);
-            m_fFile.flush();
+    
+    for (const auto& sinkType : m_sSinkTypes) {
+        switch ((int)sinkType) {
+            case (int)VHLogSinkType::FileSink:
+                if (m_fFile) {
+                    m_fFile << composedMessage;
+                    m_iCurrentSize += (composedMessage.size() + 1);
+                    m_fFile.flush();
+                }
+                if (sinkType == VHLogSinkType::FileSink) {
+                    if (!m_fFile.is_open()) {
+                        std::cerr << "Logfile is not open. Won't write." << '\n';
+                        break;
+                    }
+                    else if (shouldRotate(sMessage.size())) {
+                        addLogSink(sinkType, m_sBasePathAndName, m_iMaxSize);
+                    }
+                }
+                break;
+            case (int)VHLogSinkType::ConsoleSink:
+                std::cout << composedMessage << '\n';
+                break;
+            case (int)VHLogSinkType::NullSink:
+                break;
         }
-    }
-    else {
-        std::cout << composedMessage << '\n';
     }
 }
 
-std::string VHLogger::getCurrentTime() {
+std::string VHLogger::getCurrentDateTime() {
     auto now = std::chrono::system_clock::now();
     std::time_t now_c = std::chrono::system_clock::to_time_t(now);
     std::tm tm{};
@@ -136,20 +131,6 @@ std::string VHLogger::getCurrentTime() {
     return buffer;
 }
 
-std::string VHLogger::getCurrentDate() {
-    auto now = std::chrono::system_clock::now();
-    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-    std::tm tm{};
-#ifdef _WIN32
-    localtime_s(&now_c, &tm):
-#else
-    localtime_r(&now_c, &tm);
-#endif
-    char buffer[20];
-    std::strftime(buffer, sizeof(buffer), "%Y-%m-%d", &tm);
-    return buffer;
-}
-
 std::string VHLogger::levelToString(VHLogLevel level) {
     switch (level) {
         case VHLogLevel::DEBUGLV:
@@ -160,6 +141,8 @@ std::string VHLogger::levelToString(VHLogLevel level) {
             return "ERROR";
         case VHLogLevel::WARNINGLV:
             return "WARNING";
+        case VHLogLevel::FATALLV:
+            return "FATAL";
         default:
             return "UNKNOWN";
     }
@@ -170,7 +153,9 @@ bool VHLogger::shouldRotate(std::size_t iMessageSize) {
     if (m_iCurrentSize + iMessageSize > m_iMaxSize) {
         return true;
     }
-    std::string currentDate = getCurrentDate();
+    std::string currentDateTime = getCurrentDateTime();
+    std::string currentDate = currentDateTime.substr(0, currentDateTime.find('_'));
+    
     if (currentDate != m_sCurrentDate) {
         return true;
     }
