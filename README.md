@@ -9,7 +9,7 @@ $ git clone --recurse-submodules https://github.com/martuscellifaria/VHLog.git
 ```
 
 ### Embedding VHLog on your project
-You can embed VHLog in your project just like any other C++ library. Just setup your build system to the include VHLog.h and VHLog.cpp files (you can check the CMakeLists.txt provided on the root of this project as well), aind just place #include "VHLog.h" on top of the file you desire.
+You can embed VHLog in your project just like any other C++ library. Just setup your build system to the include VHLog.h and VHLog.cpp files, with the third_party directory as well (you can check the CMakeLists.txt provided on the root of this project as well), and just place #include "VHLog.h" on top of the file you desire.
 You can take a look at examples/HelloVHLog.cpp.
 
 ### Build the example
