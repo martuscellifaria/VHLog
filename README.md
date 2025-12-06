@@ -44,11 +44,11 @@ int main() {
 ```
 
 ### Available sinks
-Up to this point, VHLog has a console sink, a rotating file sink and a null sink. Multi-sink is also possible, if you call addLogSink multiple times.
+Up to this point, VHLog has a console sink, a rotating file sink, a TCP sink and a null sink. Multi-sink is also possible, if you call addLogSink multiple times.
 
 ### Log levels
 The available log levels are DEBUG, INFO, WARNING, ERROR, FATAL. There is not yet a possibility of filtering out, but it will be implemented soon.
 
 ### Next steps
 - Create a filtering system for differentiate development and production environments.
-- Add other log sinks (TCP, UDP, SysLog...).
+- Add other log sinks (UDP, SysLog...).

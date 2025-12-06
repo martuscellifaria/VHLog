@@ -11,6 +11,9 @@
 #include <condition_variable>
 #include <utility>
 #include <type_traits>
+#include "asio.hpp"
+#include "asio/steady_timer.hpp"
+
 
 template<typename... Args>
 std::string VHGlobalFormat(Args&&... args) {
@@ -49,7 +52,8 @@ enum class VHLogLevel {
 enum class VHLogSinkType {
     ConsoleSink,
     FileSink,
-    NullSink
+    NullSink,
+    TCPSink
 };
 
 class VHLogger {
@@ -62,9 +66,11 @@ public:
         return nfLogger;
     }
 
-    void addLogSink(VHLogSinkType sinkType = VHLogSinkType::ConsoleSink,
-            const std::string& sBasePathAndName = "",
-            std::size_t iMaxSize = 1024 * 1024);
+    void addConsoleSink();
+    void addFileSink(const std::string& sBasePathAndName = "", std::size_t iMaxSize = 1024*1024);
+    void addNullSink();
+    void addTCPSink(const std::string& sHostIPAddress, unsigned int iHostPort);
+
 
     void log(VHLogLevel level, std::string sMessage);
 
@@ -90,4 +96,18 @@ private:
     std::size_t m_iCurrentSize;
     std::string m_sCurrentDate;
     std::set<VHLogSinkType> m_sSinkTypes;
+
+    // TCPSink with asio
+    asio::io_context m_ioContext;
+    std::unique_ptr<asio::steady_timer> m_atReconnectTimer;
+    std::string m_sHostIPAdress;
+    unsigned int m_iHostPort;
+    void connectTCPSink();
+    void scheduleReconnectTCPSink();
+    std::atomic<bool> m_bSocketConnected;
+    bool m_bShutdownSocket;
+    asio::ip::tcp::socket m_asSocket;
+    std::unique_ptr<asio::executor_work_guard<asio::io_context::executor_type>> m_workGuard;
+    std::thread m_tioThread;
+    mutable std::mutex m_socketMutex;
 };
