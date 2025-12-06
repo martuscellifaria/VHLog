@@ -38,7 +38,7 @@ You have to instantiate VHLog at first, add a sink, and then you should be ready
 
 int main() {
     VHLogger vladoLog = VHLogger();
-    vladoLog.addLogSink(VHLogSinkType::ConsoleSink);
+    vladoLog.addConsoleSink();
     vladoLog.log(VHLogLevel::INFOLV, "Hi VHLog!");
 }
 ```

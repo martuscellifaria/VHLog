@@ -49,12 +49,6 @@ enum class VHLogLevel {
     FATALLV
 };
 
-enum class VHLogSinkType {
-    ConsoleSink,
-    FileSink,
-    NullSink,
-    TCPSink
-};
 
 class VHLogger {
 public:
@@ -66,6 +60,15 @@ public:
         return nfLogger;
     }
 
+private:
+    enum class VHLogSinkType {
+        ConsoleSink,
+        FileSink,
+        NullSink,
+        TCPSink
+    };
+
+public:
     void addConsoleSink();
     void addFileSink(const std::string& sBasePathAndName = "", std::size_t iMaxSize = 1024*1024);
     void addNullSink();
