@@ -2,6 +2,12 @@
 VHLog is a lightweight alternative to other C++ Async Log libraries.
 It is named after Vladimir Herzog, a brazilian journalist murdered by the military dictatorship in the year of 1975.
 
+### Cloning VHLog
+VHLog uses asio as third party dependency for TCP sink support, so you will have to clone the repository with the following command:
+```bash
+$ git clone --recurse-submodules https://github.com/martuscellifaria/VHLog.git
+```
+
 ### Embedding VHLog on your project
 You can embed VHLog in your project just like any other C++ library. Just setup your build system to the include VHLog.h and VHLog.cpp files (you can check the CMakeLists.txt provided on the root of this project as well), aind just place #include "VHLog.h" on top of the file you desire.
 You can take a look at examples/HelloVHLog.cpp.
