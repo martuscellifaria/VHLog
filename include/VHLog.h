@@ -11,8 +11,12 @@
 #include <condition_variable>
 #include <utility>
 #include <type_traits>
+
+#ifdef USE_ASIO
 #include "asio.hpp"
+#include "asio/ip/tcp.hpp"
 #include "asio/steady_timer.hpp"
+#endif
 
 template<typename... Args>
 std::string VHGlobalFormat(Args&&... args) {
@@ -98,6 +102,7 @@ private:
     std::string m_sCurrentDate;
     std::set<VHLogSinkType> m_sSinkTypes;
 
+#ifdef USE_ASIO 
     // TCPSink with asio
     asio::io_context m_ioContext;
     std::unique_ptr<asio::steady_timer> m_atReconnectTimer;
@@ -111,4 +116,5 @@ private:
     std::unique_ptr<asio::executor_work_guard<asio::io_context::executor_type>> m_workGuard;
     std::thread m_tioThread;
     mutable std::mutex m_socketMutex;
+#endif
 };

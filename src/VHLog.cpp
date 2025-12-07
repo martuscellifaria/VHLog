@@ -1,34 +1,44 @@
 #include "../include/VHLog.h"
-#include "asio/ip/tcp.hpp"
 #include <chrono>
 #include <ctime>
 #include <iostream>
 #include <mutex>
 #include <string>
 
+
+#ifdef USE_ASIO
 VHLogger::VHLogger(bool bDebugEnvironment) : m_asSocket(m_ioContext) {
-    m_bSocketConnected = false;
-    m_bShutdownSocket = false;
+#else
+VHLogger::VHLogger(bool bDebugEnvironment) {
+#endif 
     m_bWorkerRunning = true;
     m_bDebugEnvironment = bDebugEnvironment;
     m_sBasePathAndName = "";
     m_sSinkTypes.clear();
+    
+#ifdef USE_ASIO
+    m_bSocketConnected = false;
+    m_bShutdownSocket = false;
     m_atReconnectTimer = std::make_unique<asio::steady_timer>(m_ioContext);
 
     m_workGuard = std::make_unique<asio::executor_work_guard<asio::io_context::executor_type>>(
         asio::make_work_guard(m_ioContext)
     );
-
+#endif
     m_tLoggerThread = std::thread(&VHLogger::loggerWorker, this);
+#ifdef USE_ASIO
     m_tioThread = std::thread([this] { 
         m_ioContext.run(); 
     });
+#endif 
     
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
 }
 
 VHLogger::~VHLogger() {
     m_bWorkerRunning = false;
+    
+#ifdef USE_ASIO
     m_bShutdownSocket = true;
     
     if (m_atReconnectTimer) {
@@ -36,13 +46,14 @@ VHLogger::~VHLogger() {
     }
     
     m_ioContext.stop();
-    
+#endif
     m_cCondVar.notify_all();
     
     if (m_tLoggerThread.joinable()) {
         m_tLoggerThread.join();
     }
-    
+
+#ifdef USE_ASIO
     if (m_workGuard) {
         m_workGuard.reset(); 
     }
@@ -50,6 +61,7 @@ VHLogger::~VHLogger() {
     if (m_tioThread.joinable()) { 
         m_tioThread.join();
     }
+#endif // USE_ASIO
     
     if (m_fFile && m_fFile.is_open()) {
         m_fFile.close();
@@ -125,11 +137,15 @@ void VHLogger::addNullSink() {
 
 void VHLogger::addTCPSink(const std::string& sHostIPAddress, unsigned int iHostPort) {
 
+#ifdef USE_ASIO
     std::lock_guard<std::mutex> lock(m_mMutex);
     appendNewSink(VHLogSinkType::TCPSink);
     m_sHostIPAdress = sHostIPAddress;
     m_iHostPort = iHostPort;
     connectTCPSink();
+#else
+    writeToDestination(VHLogLevel::WARNINGLV, "You are trying to use TCP sink, but you have compiled without asio.");
+#endif
 }
 
 void VHLogger::log(VHLogLevel level, std::string sMessage) {
@@ -170,6 +186,7 @@ void VHLogger::writeToDestination(VHLogLevel level, const std::string& sMessage)
             case (int)VHLogSinkType::NullSink:
                 break;
             case (int)VHLogSinkType::TCPSink:
+#ifdef USE_ASIO
                 bool connected = false;
                 {
                     std::lock_guard<std::mutex> lock(m_socketMutex);
@@ -187,6 +204,7 @@ void VHLogger::writeToDestination(VHLogLevel level, const std::string& sMessage)
                         }
                     );
                 });
+#endif
                 break;
         }
     }
@@ -237,6 +255,7 @@ bool VHLogger::shouldRotate(std::size_t iMessageSize) {
     return false;
 }
 
+#ifdef USE_ASIO
 void VHLogger::connectTCPSink() {
     if (m_bShutdownSocket) {
         return;
@@ -294,3 +313,4 @@ void VHLogger::scheduleReconnectTCPSink() {
         }
     );
 }
+#endif 
