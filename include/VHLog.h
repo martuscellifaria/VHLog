@@ -54,7 +54,7 @@ enum class VHLogLevel {
 
 class VHLogger {
 public:
-    VHLogger(bool bDebugEnvironment = true);
+    VHLogger(bool bDebugEnvironment = true, std::size_t iBatchSize = 1);
     virtual ~VHLogger();
 
     static std::shared_ptr<VHLogger> instance() {
@@ -85,12 +85,16 @@ private:
     std::string getCurrentDateTime();
     std::string levelToString(VHLogLevel level);
     bool shouldRotate(std::size_t iMessageSize);
+    void rotateFileSink();
 
     std::mutex m_mMutex;
+    std::mutex m_mFileMutex;
     std::ofstream m_fFile;
+    std::size_t m_iUnflushedBytes;
     std::thread m_tLoggerThread;
     void loggerWorker();
     bool m_bWorkerRunning;
+    std::size_t m_iBatchSize;
 
     std::deque<std::pair<VHLogLevel, std::string>> m_dLogMessageQueue;
     bool m_bDebugEnvironment;
@@ -101,7 +105,7 @@ private:
     std::size_t m_iCurrentSize;
     std::string m_sCurrentDate;
     std::set<VHLogSinkType> m_sSinkTypes;
-
+    static constexpr std::size_t FLUSH_THRESHOLD = 4096;
 #ifdef USE_ASIO 
     // TCPSink with asio
     asio::io_context m_ioContext;
