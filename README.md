@@ -3,9 +3,19 @@ VHLog is a lightweight alternative to other C++ Async Log libraries.
 It is named after Vladimir Herzog, a brazilian journalist murdered by the military dictatorship in the year of 1975.
 
 ### Cloning VHLog
-VHLog uses asio as third party dependency for TCP sink support, so you will have to clone the repository with the following command:
+You can clone the repository as usual with the following command:
 ```bash
-$ git clone --recurse-submodules https://github.com/martuscellifaria/VHLog.git
+$ git clone https://github.com/martuscellifaria/VHLog.git
+```
+
+However, if you need to activate the TCP sink option, you can clone it with submodules: 
+```bash
+$ git clone -recurse-submodules https://github.com/martuscellifaria/VHLog.git
+```
+
+If you cloned with the first option, you can later use the following command:
+```bash
+$ git sumodule update --init
 ```
 
 ### Embedding VHLog on your project
@@ -31,6 +41,22 @@ You may also be able to produce a Visual Studio Solution (.sln) on Windows follo
 $ mkdir build
 $ cd build
 $ cmake ..
+```
+
+### TCP Sink compile option
+If you want to enable support for TCP Log Sink, you will have to activate the asio compilation. First ensure you have the asio library inside the third_party directory. Then you can set the following flag on your build with cmake:
+```bash
+$ cmake .. -DUSE_ASIO=ON
+```
+
+You can take the buildscript.sh file as example, there is the flag for enabling compilation with asio disabled by default.
+```bash
+$ cat buildscript.sh
+mkdir build
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DUSE_ASIO=OFF
+ninja
+ln -sf build/compile_commands.json ../
 ```
 
 ### Supported platforms
