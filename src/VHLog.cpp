@@ -6,10 +6,11 @@
 #include <mutex>
 #include <string>
 
-VHLogger::VHLogger() : m_asSocket(m_ioContext) {
+VHLogger::VHLogger(bool bDebugEnvironment) : m_asSocket(m_ioContext) {
     m_bSocketConnected = false;
     m_bShutdownSocket = false;
     m_bWorkerRunning = true;
+    m_bDebugEnvironment = bDebugEnvironment;
     m_sBasePathAndName = "";
     m_sSinkTypes.clear();
     m_atReconnectTimer = std::make_unique<asio::steady_timer>(m_ioContext);
@@ -69,13 +70,17 @@ void VHLogger::loggerWorker() {
             std::string message = std::move(m_dLogMessageQueue.front().second);
             m_dLogMessageQueue.pop_front();
             lock.unlock();
-            writeToDestination(level, message);
+            if (level != VHLogLevel::DEBUGLV || m_bDebugEnvironment) {
+                writeToDestination(level, message);
+            }
             lock.lock();
         }
     }
 
     while (!m_dLogMessageQueue.empty()) {
-        writeToDestination(m_dLogMessageQueue.front().first, m_dLogMessageQueue.front().second);
+        if (m_dLogMessageQueue.front().first != VHLogLevel::DEBUGLV || m_bDebugEnvironment) {
+            writeToDestination(m_dLogMessageQueue.front().first, m_dLogMessageQueue.front().second);
+        }
         m_dLogMessageQueue.pop_front();
     }
 }

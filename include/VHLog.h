@@ -14,7 +14,6 @@
 #include "asio.hpp"
 #include "asio/steady_timer.hpp"
 
-
 template<typename... Args>
 std::string VHGlobalFormat(Args&&... args) {
     std::string result;
@@ -49,10 +48,9 @@ enum class VHLogLevel {
     FATALLV
 };
 
-
 class VHLogger {
 public:
-    VHLogger();
+    VHLogger(bool bDebugEnvironment = true);
     virtual ~VHLogger();
 
     static std::shared_ptr<VHLogger> instance() {
@@ -74,7 +72,6 @@ public:
     void addNullSink();
     void addTCPSink(const std::string& sHostIPAddress, unsigned int iHostPort);
 
-
     void log(VHLogLevel level, std::string sMessage);
 
 private:
@@ -92,6 +89,7 @@ private:
     bool m_bWorkerRunning;
 
     std::deque<std::pair<VHLogLevel, std::string>> m_dLogMessageQueue;
+    bool m_bDebugEnvironment;
     std::mutex m_mQueueMutex;
     std::condition_variable m_cCondVar;
     std::string m_sBasePathAndName;
