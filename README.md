@@ -82,5 +82,5 @@ Up to this point, VHLog has a console sink, a rotating file sink, a TCP sink and
 The available log levels are DEBUG, INFO, WARNING, ERROR, FATAL. Debug level messages can be filtered out by passing a boolean with value false onto the VHLogger constructor. The default constructor has it set to true, so debug level messages are active by default.
 
 ### Next steps
-- Asio/TCP sink as optional, so one do not has to have to clone with recurse-submodules to use VHLog.
 - Add other log sinks (UDP, SysLog...).
+- Optimization
