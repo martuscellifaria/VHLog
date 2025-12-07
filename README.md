@@ -43,7 +43,7 @@ You have to instantiate VHLog at first, add a sink, and then you should be ready
 #include "../include/VHLog.h"
 
 int main() {
-    VHLogger vladoLog = VHLogger();
+    VHLogger vladoLog = VHLogger(false); //The boolean here filters the logging from DEBUGLV out (for production).
     vladoLog.addConsoleSink();
     vladoLog.log(VHLogLevel::INFOLV, "Hi VHLog!");
 }
@@ -56,5 +56,4 @@ Up to this point, VHLog has a console sink, a rotating file sink, a TCP sink and
 The available log levels are DEBUG, INFO, WARNING, ERROR, FATAL. There is not yet a possibility of filtering out, but it will be implemented soon.
 
 ### Next steps
-- Create a filtering system for differentiate development and production environments.
 - Add other log sinks (UDP, SysLog...).
