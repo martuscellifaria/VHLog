@@ -14,11 +14,11 @@ $ git clone https://github.com/martuscellifaria/VHLog.git
 
 However, if you need to activate the TCP sink option, you can clone it with submodules: 
 ```bash
-$ git clone -recurse-submodules https://codeberg.org/mrtscllfr/VHLog.git
+$ git clone --recurse-submodules https://codeberg.org/mrtscllfr/VHLog.git
 ```
 
 ```bash
-$ git clone -recurse-submodules https://github.com/martuscellifaria/VHLog.git
+$ git clone --recurse-submodules https://github.com/martuscellifaria/VHLog.git
 ```
 
 If you cloned with the first option, you can later use the following command:
