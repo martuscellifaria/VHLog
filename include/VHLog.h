@@ -54,7 +54,7 @@ enum class VHLogLevel {
 
 class VHLogger {
 public:
-    VHLogger(bool bDebugEnvironment = true, std::size_t iBatchSize = 1);
+    VHLogger(bool debugEnvironment = true, std::size_t batchSize = 1);
     virtual ~VHLogger();
 
     static std::shared_ptr<VHLogger> instance() {
@@ -72,53 +72,59 @@ private:
 
 public:
     void addConsoleSink();
-    void addFileSink(const std::string& sBasePathAndName = "", std::size_t iMaxSize = 1024*1024);
+    void addFileSink(const std::string& basePathAndName = "", std::size_t maxSize = 1024*1024);
     void addNullSink();
-    void addTCPSink(const std::string& sHostIPAddress, unsigned int iHostPort);
+    void addTCPSink(const std::string& hostIpAddress, unsigned int hostPort);
 
-    void log(VHLogLevel level, std::string sMessage);
+    void log(VHLogLevel level, std::string message);
 
 private:
-    void writeToDestination(VHLogLevel level, const std::string& sMessage);
-    void appendNewSink(VHLogSinkType newSink) { m_sSinkTypes.insert(newSink); }
+    void writeToDestination(VHLogLevel level, const std::string& message);
+    void appendNewSink(VHLogSinkType newSink) { sinkTypes_.insert(newSink); }
     
     std::string getCurrentDateTime();
     std::string levelToString(VHLogLevel level);
-    bool shouldRotate(std::size_t iMessageSize);
+    bool shouldRotate(std::size_t messageSize);
     void rotateFileSink();
 
-    std::mutex m_mMutex;
-    std::mutex m_mFileMutex;
-    std::ofstream m_fFile;
-    std::size_t m_iUnflushedBytes;
-    std::thread m_tLoggerThread;
+    std::mutex mutex_;
+    std::mutex fileMutex_;
+    std::ofstream file_;
+    std::size_t unflushedBytes_;
+    std::thread loggerThread_;
     void loggerWorker();
-    bool m_bWorkerRunning;
-    std::size_t m_iBatchSize;
+    bool workerRunning_;
+    std::size_t batchSize_;
 
-    std::deque<std::pair<VHLogLevel, std::string>> m_dLogMessageQueue;
-    bool m_bDebugEnvironment;
-    std::mutex m_mQueueMutex;
-    std::condition_variable m_cCondVar;
-    std::string m_sBasePathAndName;
-    std::size_t m_iMaxSize;
-    std::size_t m_iCurrentSize;
-    std::string m_sCurrentDate;
-    std::set<VHLogSinkType> m_sSinkTypes;
+    std::deque<std::pair<VHLogLevel, std::string>> logMessageQueue_;
+    bool debugEnvironment_;
+    std::mutex queueMutex_;
+    std::condition_variable condVar_;
+    std::string basePathAndName_;
+    std::size_t maxSize_;
+    std::size_t currentSize_;
+    std::string currentDate_;
+    std::set<VHLogSinkType> sinkTypes_;
     static constexpr std::size_t FLUSH_THRESHOLD = 4096;
 #ifdef USE_ASIO 
     // TCPSink with asio
-    asio::io_context m_ioContext;
-    std::unique_ptr<asio::steady_timer> m_atReconnectTimer;
-    std::string m_sHostIPAdress;
-    unsigned int m_iHostPort;
+    asio::io_context ioContext_;
+    std::unique_ptr<asio::steady_timer> reconnectTimer_;
+    std::string hostIpAddress_;
+    unsigned int hostPort_;
+    std::string readBuffer_;
     void connectTCPSink();
+    void startReadingForDisconnects();
     void scheduleReconnectTCPSink();
-    std::atomic<bool> m_bSocketConnected;
-    bool m_bShutdownSocket;
-    asio::ip::tcp::socket m_asSocket;
-    std::unique_ptr<asio::executor_work_guard<asio::io_context::executor_type>> m_workGuard;
-    std::thread m_tioThread;
-    mutable std::mutex m_socketMutex;
+    std::atomic<bool> socketConnected_;
+    bool shutdownSocket_;
+    asio::ip::tcp::socket socket_;
+    std::unique_ptr<asio::executor_work_guard<asio::io_context::executor_type>> workGuard_;
+    std::thread ioThread_;
+    mutable std::mutex socketMutex_;
+    std::deque<std::string> tcpMessageQueue_;
+    bool tcpIsSending_;
+    void sendNextTCPMessage();
 #endif
 };
+

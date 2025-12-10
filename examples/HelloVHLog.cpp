@@ -16,6 +16,4 @@ int main() {
 
     vladoLog.log(VHLogLevel::INFOLV, helloVlado);
     vladoLog.log(VHLogLevel::DEBUGLV, "VHLog End");
-
-    std::this_thread::sleep_for(std::chrono::seconds(2));
 } 

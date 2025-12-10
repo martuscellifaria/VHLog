@@ -3,12 +3,20 @@ VHLog is a lightweight alternative to other C++ Async Log libraries.
 It is named after Vladimir Herzog, a brazilian journalist murdered by the military dictatorship in the year of 1975.
 
 ### Cloning VHLog
-You can clone the repository as usual with the following command:
+You can clone the repository as usual with one the following commands (CodeBerg is preferable):
+```bash
+$ git clone https://codeberg.org/mrtscllfr/VHLog.git
+```
+
 ```bash
 $ git clone https://github.com/martuscellifaria/VHLog.git
 ```
 
 However, if you need to activate the TCP sink option, you can clone it with submodules: 
+```bash
+$ git clone -recurse-submodules https://codeberg.org/mrtscllfr/VHLog.git
+```
+
 ```bash
 $ git clone -recurse-submodules https://github.com/martuscellifaria/VHLog.git
 ```
@@ -83,4 +91,4 @@ The available log levels are DEBUG, INFO, WARNING, ERROR, FATAL. Debug level mes
 
 ### Next steps
 - Add other log sinks (UDP, SysLog...).
-- Optimization
+- String formatting optimization.
