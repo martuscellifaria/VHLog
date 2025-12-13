@@ -1,4 +1,4 @@
-#include "../include/VHLog.h"
+#include "VHLog.h"
 #include "asio/error_code.hpp"
 #include <chrono>
 #include <cstddef>
@@ -7,10 +7,8 @@
 #include <mutex>
 #include <string>
 
-
 #ifdef USE_ASIO
 VHLogger::VHLogger(bool debugEnvironment, std::size_t batchSize) : socket_(ioContext_) {
-
     workerRunning_ = true;
     batchSize_ = batchSize;
     tcpIsSending_ = false;
@@ -19,8 +17,9 @@ VHLogger::VHLogger(bool debugEnvironment, std::size_t batchSize) : socket_(ioCon
     basePathAndName_ = "";
     sinkTypes_.clear();
     socketConnected_ = false;
-    shutdownSocket_ = false;
+    shutdownSocket_.store(false, std::memory_order_release);  
     reconnectTimer_ = std::make_unique<asio::steady_timer>(ioContext_);
+    vhlogShutdown_ = false;
 
     workGuard_ = std::make_unique<asio::executor_work_guard<asio::io_context::executor_type>>(
         asio::make_work_guard(ioContext_)
@@ -32,61 +31,55 @@ VHLogger::VHLogger(bool debugEnvironment, std::size_t batchSize) : socket_(ioCon
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
 }
 
-VHLogger::~VHLogger() {
-   
+void VHLogger::shutdown() {
+    
     workerRunning_ = false;
-
-    condVar_.notify_all();
-
-    std::deque<std::pair<VHLogLevel, std::string>> remainingMessages;
-    {
-        std::lock_guard<std::mutex> lock(queueMutex_);
-        remainingMessages.swap(logMessageQueue_);
-    }
-
-    for (auto& [level, message] : remainingMessages) {
-        if (!message.empty()) {
-            writeToDestination(level, message);
-        }
-    }
-
-    if (!tcpMessageQueue_.empty()) {
-        
-        for (int i = 0; i < 50 && !tcpMessageQueue_.empty(); ++i) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-    }
-    
-    shutdownSocket_ = true;
-    
-    {
-        std::lock_guard<std::mutex> lock(socketMutex_);
-        tcpIsSending_ = false;
-        socketConnected_ = false;
-    }
-    
-    std::error_code ec;
-    asio::error_code res = socket_.cancel(ec); 
-    
-    if (reconnectTimer_) {
-        reconnectTimer_->cancel();
-    }
-    
-    if (socket_.is_open()) {
-        res = socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
-        res = socket_.close(ec);
-    }
-    
-    tcpMessageQueue_.clear();
-    
-    ioContext_.stop();
-    
     condVar_.notify_all();
     
     if (loggerThread_.joinable()) {
         loggerThread_.join();
     }
-
+    
+    std::deque<std::pair<VHLogLevel, std::string>> remainingMessages;
+    {
+        std::lock_guard<std::mutex> lock(queueMutex_);
+        remainingMessages.swap(logMessageQueue_);
+    }
+    
+    for (auto& [level, message] : remainingMessages) {
+        if (!message.empty()) {
+            writeToDestination(level, message);
+        }
+    }
+    
+    if (reconnectTimer_) {
+        reconnectTimer_->cancel();
+    }
+    
+    asio::error_code res;
+    std::error_code ec;
+    res = socket_.cancel(ec);
+    
+    ioContext_.restart();
+    while (ioContext_.poll_one() > 0) {}
+    
+    {
+        std::lock_guard<std::mutex> lock(socketMutex_);
+        tcpMessageQueue_.clear();
+        tcpIsSending_ = false;
+    }
+    
+    {
+        std::lock_guard<std::mutex> lock(socketMutex_);
+        if (socket_.is_open()) {
+            res = socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+            res = socket_.close(ec);
+        }
+        socketConnected_ = false;
+    }
+    
+    ioContext_.stop();
+    
     if (workGuard_) {
         workGuard_.reset();
     }
@@ -95,13 +88,21 @@ VHLogger::~VHLogger() {
         ioThread_.join();
     }
     
+    ioContext_.restart();
+    while (ioContext_.poll_one() > 0) {}
+    
     if (file_ && file_.is_open()) {
         file_.flush();
         file_.close();
     }
+    
+    shutdownSocket_.store(true, std::memory_order_release);
+    vhlogShutdown_ = true;
 }
+
 #else
 VHLogger::VHLogger(bool debugEnvironment, std::size_t batchSize) {
+    
     workerRunning_ = true;
     batchSize_ = batchSize;
     unflushedBytes_ = 0;
@@ -111,7 +112,8 @@ VHLogger::VHLogger(bool debugEnvironment, std::size_t batchSize) {
     loggerThread_ = std::thread(&VHLogger::loggerWorker, this);
 }
 
-VHLogger::~VHLogger() {
+VHLogger::shutdown() {
+
     workerRunning_ = false;
     
     condVar_.notify_all();
@@ -124,9 +126,17 @@ VHLogger::~VHLogger() {
         file_.flush();
         file_.close();
     }
+    vhlogShutdown_ = true;
 }
 
 #endif
+
+VHLogger::~VHLogger() {
+
+    if (!vhlogShutdown_) {
+        shutdown();
+    }
+}
 
 void VHLogger::loggerWorker() {
     
@@ -302,13 +312,17 @@ void VHLogger::writeToDestination(VHLogLevel level, const std::string& message) 
                 break;
             case (int)VHLogSinkType::TCPSink:
 #ifdef USE_ASIO
-                std::string msgCopy = composedMessage;
-                asio::post(ioContext_, [this, msg = std::move(msgCopy) ]() {
-                    tcpMessageQueue_.push_back(std::move(msg));
-                    if (!tcpIsSending_) {
-                        sendNextTCPMessage();
-                    }
-                });
+                if (!shutdownSocket_) {
+                    std::string msgCopy = composedMessage;
+                    asio::post(ioContext_, [this, msg = std::move(msgCopy) ]() {
+                        if (!shutdownSocket_) {
+                            tcpMessageQueue_.push_back(std::move(msg));
+                            if (!tcpIsSending_) {
+                                sendNextTCPMessage();
+                            }
+                        }
+                    });
+                }
 #endif
                 break;
         }
@@ -421,12 +435,9 @@ void VHLogger::connectTCPSink() {
 }
 
 void VHLogger::sendNextTCPMessage() {
-    
-    if (shutdownSocket_) {
-        {
-            std::lock_guard<std::mutex> lock(socketMutex_);
-            tcpIsSending_ = false;
-        }
+    if (shutdownSocket_.load(std::memory_order_acquire)) {
+        std::lock_guard<std::mutex> lock(socketMutex_);
+        tcpIsSending_ = false;
         return;
     }
     
@@ -434,60 +445,75 @@ void VHLogger::sendNextTCPMessage() {
     if (!lock.owns_lock() || tcpIsSending_) {
         return;
     }
-
+    
     if (tcpMessageQueue_.empty() || !socketConnected_) {
         tcpIsSending_ = false;
         
-        if (!tcpMessageQueue_.empty() && !socketConnected_ && !shutdownSocket_) {
+        if (!tcpMessageQueue_.empty() && !socketConnected_ && !shutdownSocket_.load(std::memory_order_acquire)) {
             asio::post(ioContext_, [this]() {
-                connectTCPSink();
+                if (!shutdownSocket_.load(std::memory_order_acquire)) {
+                    connectTCPSink();
+                }
             });
         }
         return;
     }
-
-    tcpIsSending_ = true;
-    std::string message = tcpMessageQueue_.front();
     
-    std::string message_copy = message;
+    tcpIsSending_ = true;
+    std::string message = std::move(tcpMessageQueue_.front());
     tcpMessageQueue_.pop_front();
-
-    asio::async_write(socket_, asio::buffer(message),
-        [this, message_copy](std::error_code ec, size_t bytes_written) {
+    
+    if (shutdownSocket_.load(std::memory_order_acquire)) {
+        tcpIsSending_ = false;
+        return;
+    }
+    
+    auto message_ptr = std::make_shared<std::string>(std::move(message));
+    
+    asio::async_write(socket_, asio::buffer(*message_ptr),
+        [this, message_ptr](std::error_code ec, size_t bytes_written) {
+            if (shutdownSocket_.load(std::memory_order_acquire)) {
+                std::lock_guard<std::mutex> lock(socketMutex_);
+                tcpIsSending_ = false;
+                return;
+            }
+            
             {
                 std::lock_guard<std::mutex> lock(socketMutex_);
                 tcpIsSending_ = false;
             }
             
             if (ec) {
-                if (!shutdownSocket_) {
-                    tcpMessageQueue_.push_front(message_copy);
-                }
-                
-                std::error_code ignored_ec;
-                asio::error_code res;
-                res = socket_.close(ignored_ec);
-                
-                {
+                if (!shutdownSocket_.load(std::memory_order_acquire)) {
                     std::lock_guard<std::mutex> lock(socketMutex_);
-                    socketConnected_ = false;
-                }
-                
-                if (!shutdownSocket_) {
-                    scheduleReconnectTCPSink();
+                    if (!shutdownSocket_.load(std::memory_order_acquire)) {
+                        tcpMessageQueue_.push_front(std::move(*message_ptr));
+                        
+                        std::error_code ignored_ec;
+                        socket_.close(ignored_ec);
+                        socketConnected_ = false;
+                        
+                        if (!shutdownSocket_.load(std::memory_order_acquire)) {
+                            scheduleReconnectTCPSink();
+                        }
+                    }
                 }
             } 
             else {
-                if (!tcpMessageQueue_.empty() && !shutdownSocket_) {
+                if (!shutdownSocket_.load(std::memory_order_acquire)) {
                     bool connected = false;
+                    bool hasMore = false;
                     {
                         std::lock_guard<std::mutex> lock(socketMutex_);
                         connected = socketConnected_;
+                        hasMore = !tcpMessageQueue_.empty();
                     }
                     
-                    if (connected) {
+                    if (hasMore && connected) {
                         asio::post(ioContext_, [this]() {
-                            sendNextTCPMessage();
+                            if (!shutdownSocket_.load(std::memory_order_acquire)) {
+                                sendNextTCPMessage();
+                            }
                         });
                     }
                 }

@@ -1,4 +1,4 @@
-#include "../include/VHLog.h"
+#include "VHLog.h"
 #include <chrono>
 #include <thread>
 
@@ -16,4 +16,6 @@ int main() {
 
     vladoLog.log(VHLogLevel::INFOLV, helloVlado);
     vladoLog.log(VHLogLevel::DEBUGLV, "VHLog End");
+
+    vladoLog.shutdown();
 } 

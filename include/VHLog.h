@@ -55,6 +55,7 @@ enum class VHLogLevel {
 class VHLogger {
 public:
     VHLogger(bool debugEnvironment = true, std::size_t batchSize = 1);
+    void shutdown();
     virtual ~VHLogger();
 
     static std::shared_ptr<VHLogger> instance() {
@@ -106,6 +107,7 @@ private:
     std::string currentDate_;
     std::set<VHLogSinkType> sinkTypes_;
     static constexpr std::size_t FLUSH_THRESHOLD = 4096;
+    bool vhlogShutdown_;
 #ifdef USE_ASIO 
     // TCPSink with asio
     asio::io_context ioContext_;
@@ -117,7 +119,7 @@ private:
     void startReadingForDisconnects();
     void scheduleReconnectTCPSink();
     std::atomic<bool> socketConnected_;
-    bool shutdownSocket_;
+    std::atomic<bool> shutdownSocket_{false};
     asio::ip::tcp::socket socket_;
     std::unique_ptr<asio::executor_work_guard<asio::io_context::executor_type>> workGuard_;
     std::thread ioThread_;
