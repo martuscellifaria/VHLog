@@ -1,6 +1,5 @@
 # VHLog
 VHLog is a lightweight alternative to other C++ Async Log libraries.
-It is named after Vladimir Herzog, a brazilian journalist murdered by the military dictatorship in the year of 1975.
 
 ### Cloning VHLog
 You can clone the repository as usual with one the following commands (CodeBerg is preferable):
@@ -67,6 +66,9 @@ ninja
 ln -sf build/compile_commands.json ../
 ```
 
+### Debugging
+If you want to run VHLog with debug information, you can run debBuildscript.sh, or just change the CMAKE_BUILD_TYPE flag to RelWithDebInfo. This will produce a slightly bigger binary, that you can run with a debugger such as gdb, and then set breakpoints and so on.
+
 ### Supported platforms
 Linux, Windows, MacOS
 
@@ -74,7 +76,7 @@ Linux, Windows, MacOS
 You have to instantiate VHLog at first, add a sink, and then you should be ready.
 ```c++
 
-#include "../include/VHLog.h"
+#include "VHLog.h"
 
 int main() {
     VHLogger vladoLog = VHLogger(false); //The boolean here filters the logging from DEBUGLV out (for production).
@@ -92,3 +94,6 @@ The available log levels are DEBUG, INFO, WARNING, ERROR, FATAL. Debug level mes
 ### Next steps
 - Add other log sinks (UDP, SysLog...).
 - String formatting optimization.
+
+### VHLog Name
+VHLog is named after Vladimir Herzog, a brazilian journalist murdered by the military dictatorship in the year of 1975.

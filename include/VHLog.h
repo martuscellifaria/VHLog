@@ -14,8 +14,6 @@
 
 #ifdef USE_ASIO
 #include "asio.hpp"
-#include "asio/ip/tcp.hpp"
-#include "asio/steady_timer.hpp"
 #endif
 
 template<typename... Args>
@@ -54,7 +52,7 @@ enum class VHLogLevel {
 
 class VHLogger {
 public:
-    VHLogger(bool debugEnvironment = true, std::size_t batchSize = 1);
+    explicit VHLogger(bool debugEnvironment = true, std::size_t batchSize = 1);
     void shutdown();
     virtual ~VHLogger();
 
@@ -77,7 +75,7 @@ public:
     void addNullSink();
     void addTCPSink(const std::string& hostIpAddress, unsigned int hostPort);
 
-    void log(VHLogLevel level, std::string message);
+    void log(VHLogLevel level, const std::string& message);
 
 private:
     void writeToDestination(VHLogLevel level, const std::string& message);

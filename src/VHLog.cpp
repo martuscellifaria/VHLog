@@ -1,5 +1,4 @@
 #include "VHLog.h"
-#include "asio/error_code.hpp"
 #include <chrono>
 #include <cstddef>
 #include <ctime>
@@ -8,13 +7,14 @@
 #include <string>
 
 #ifdef USE_ASIO
-VHLogger::VHLogger(bool debugEnvironment, std::size_t batchSize) : socket_(ioContext_) {
+VHLogger::VHLogger(bool debugEnvironment, std::size_t batchSize) : 
+    socket_(ioContext_),
+    basePathAndName_("") {
     workerRunning_ = true;
     batchSize_ = batchSize;
     tcpIsSending_ = false;
     unflushedBytes_ = 0;
     debugEnvironment_ = debugEnvironment;
-    basePathAndName_ = "";
     sinkTypes_.clear();
     socketConnected_ = false;
     shutdownSocket_.store(false, std::memory_order_release);  
@@ -56,9 +56,8 @@ void VHLogger::shutdown() {
         reconnectTimer_->cancel();
     }
     
-    asio::error_code res;
     std::error_code ec;
-    res = socket_.cancel(ec);
+    socket_.cancel(ec);
     
     ioContext_.restart();
     while (ioContext_.poll_one() > 0) {}
@@ -72,8 +71,8 @@ void VHLogger::shutdown() {
     {
         std::lock_guard<std::mutex> lock(socketMutex_);
         if (socket_.is_open()) {
-            res = socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
-            res = socket_.close(ec);
+            socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+            socket_.close(ec);
         }
         socketConnected_ = false;
     }
@@ -101,18 +100,17 @@ void VHLogger::shutdown() {
 }
 
 #else
-VHLogger::VHLogger(bool debugEnvironment, std::size_t batchSize) {
-    
+VHLogger::VHLogger(bool debugEnvironment, std::size_t batchSize) : 
+    basePathAndName_("") {
     workerRunning_ = true;
     batchSize_ = batchSize;
     unflushedBytes_ = 0;
     debugEnvironment_ = debugEnvironment;
-    basePathAndName_ = "";
     sinkTypes_.clear();
     loggerThread_ = std::thread(&VHLogger::loggerWorker, this);
 }
 
-VHLogger::shutdown() {
+void VHLogger::shutdown() {
 
     workerRunning_ = false;
     
@@ -139,10 +137,10 @@ VHLogger::~VHLogger() {
 }
 
 void VHLogger::loggerWorker() {
-    
+
     std::vector<std::pair<VHLogLevel, std::string>> batch;
     
-    while (workerRunning_) {
+    while (true) {
         std::unique_lock<std::mutex> lock(queueMutex_);
         
         condVar_.wait(lock, [this]() {
@@ -260,7 +258,7 @@ void VHLogger::addTCPSink(const std::string& hostIpAddress, unsigned int hostPor
 #endif
 }
 
-void VHLogger::log(VHLogLevel level, std::string message) {
+void VHLogger::log(VHLogLevel level, const std::string& message) {
     
     if (level != VHLogLevel::DEBUGLV || debugEnvironment_) {
         std::lock_guard<std::mutex> lock(queueMutex_);
