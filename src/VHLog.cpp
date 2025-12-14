@@ -207,11 +207,13 @@ void VHLogger::addFileSink(const std::string& basePathAndName, std::size_t maxSi
     
     maxSize_ = maxSize;
     currentSize_ = 0;
-
+    
     auto now = std::chrono::system_clock::now();
-    auto zt = std::chrono::zoned_time(std::chrono::current_zone(), now);
+    auto nowSec = std::chrono::floor<std::chrono::seconds>(now);
+    auto zt = std::chrono::zoned_time(std::chrono::current_zone(), nowSec);
     currentDate_ = std::format("{:%Y-%m-%d}", zt);
-    std::string fileName = std::format("{}_{:%Y-%m-%d_%H-%M}.log", basePathAndName_, zt);
+    std::string fileName = std::format("{}_{:%Y-%m-%d_%H-%M:%S}.log", basePathAndName_, zt);
+
 
     file_.open(fileName, std::ios::app);
     if (!file_) {
@@ -220,9 +222,8 @@ void VHLogger::addFileSink(const std::string& basePathAndName, std::size_t maxSi
 }
 
 void VHLogger::rotateFileSink() {
-    
+   
     std::lock_guard<std::mutex> lock(fileMutex_);
-    
     if (file_ && file_.is_open()) {
         file_.flush();
         file_.close();
@@ -232,10 +233,11 @@ void VHLogger::rotateFileSink() {
     unflushedBytes_ = 0;
 
     auto now = std::chrono::system_clock::now();
-    auto zt = std::chrono::zoned_time(std::chrono::current_zone(), now);
+    auto nowSec = std::chrono::floor<std::chrono::seconds>(now);
+    auto zt = std::chrono::zoned_time(std::chrono::current_zone(), nowSec);
     currentDate_ = std::format("{:%Y-%m-%d}", zt);
-    std::string fileName = std::format("{}_{:%Y-%m-%d_%H-%M}.log", basePathAndName_, zt);
-    
+    std::string fileName = std::format("{}_{:%Y-%m-%d_%H-%M:%S}.log", basePathAndName_, zt);
+
     file_.open(fileName, std::ios::app);
     if (!file_) {
         std::println("Failed to open/create log file: {}", fileName);
@@ -266,9 +268,7 @@ void VHLogger::log(VHLogLevel level, const std::string& message) {
     if (level != VHLogLevel::DEBUGLV || debugEnvironment_) {
         std::lock_guard<std::mutex> lock(queueMutex_);
         std::pair<VHLogLevel, std::string> received;
-        received.first = level;
-        received.second = message;
-        logMessageQueue_.emplace_back(received);
+        logMessageQueue_.emplace_back(level, std::move(message));
         condVar_.notify_one();
     }
 }
@@ -294,7 +294,6 @@ void VHLogger::writeToDestination(VHLogLevel level, const std::string& message) 
         switch ((int)sinkType) {
             case (int)VHLogSinkType::FileSink:
                 {
-                    std::lock_guard<std::mutex> fileLock(fileMutex_);
                     if (file_ && file_.is_open()) {
                         file_ << composedMessage;
                         currentSize_ += composedMessage.size();
