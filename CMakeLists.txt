@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.28)
 project(VHLog)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(USE_ASIO "Build with ASIO support" OFF)
@@ -25,7 +25,7 @@ if(WIN32)
             "${PROJECT_SOURCE_DIR}/examples/*.cpp"
             )
     add_executable(VHLog ${all_SRCS})
-    set_property(TARGET VHLog PROPERTY CXX_STANDARD 20)
+    set_property(TARGET VHLog PROPERTY CXX_STANDARD 23)
     target_include_directories(VHLog PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
     if (USE_ASIO)
         target_compile_definitions(VHLog PRIVATE USE_ASIO)
@@ -50,7 +50,7 @@ else()
 
     add_executable(VHLog ${all_SRCS})
     target_include_directories(VHLog PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-    set_property(TARGET VHLog PROPERTY CXX_STANDARD 20)
+    set_property(TARGET VHLog PROPERTY CXX_STANDARD 23)
     if (USE_ASIO)
         target_compile_definitions(VHLog PRIVATE USE_ASIO)
     endif()

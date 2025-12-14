@@ -4,12 +4,15 @@
 #include <ctime>
 #include <iostream>
 #include <mutex>
+#include <format>
+#include <print>
 #include <string>
 
 #ifdef USE_ASIO
 VHLogger::VHLogger(bool debugEnvironment, std::size_t batchSize) : 
     socket_(ioContext_),
     basePathAndName_("") {
+
     workerRunning_ = true;
     batchSize_ = batchSize;
     tcpIsSending_ = false;
@@ -52,6 +55,7 @@ void VHLogger::shutdown() {
         }
     }
     
+    shutdownSocket_.store(true, std::memory_order_release);
     if (reconnectTimer_) {
         reconnectTimer_->cancel();
     }
@@ -95,7 +99,6 @@ void VHLogger::shutdown() {
         file_.close();
     }
     
-    shutdownSocket_.store(true, std::memory_order_release);
     vhlogShutdown_ = true;
 }
 
@@ -205,14 +208,14 @@ void VHLogger::addFileSink(const std::string& basePathAndName, std::size_t maxSi
     maxSize_ = maxSize;
     currentSize_ = 0;
 
-    std::string currentDateTime = getCurrentDateTime();
-    currentDate_ = currentDateTime.substr(0, currentDateTime.find('_'));
-    std::string timeForFileName = currentDateTime.substr(0, currentDateTime.find(':'));
-    
-    std::string fileName = VHGlobalFormat(basePathAndName_, "_", timeForFileName, ".log");
+    auto now = std::chrono::system_clock::now();
+    auto zt = std::chrono::zoned_time(std::chrono::current_zone(), now);
+    currentDate_ = std::format("{:%Y-%m-%d}", zt);
+    std::string fileName = std::format("{}_{:%Y-%m-%d_%H-%M}.log", basePathAndName_, zt);
+
     file_.open(fileName, std::ios::app);
     if (!file_) {
-        std::cerr << "Failed to open/create log file: " << fileName << '\n';
+        std::println("Failed to open/create log file: {}", fileName);
     }
 }
 
@@ -228,14 +231,14 @@ void VHLogger::rotateFileSink() {
     currentSize_ = 0;
     unflushedBytes_ = 0;
 
-    std::string currentDateTime = getCurrentDateTime();
-    currentDate_ = currentDateTime.substr(0, currentDateTime.find('_'));
-    std::string timeForFileName = currentDateTime.substr(0, currentDateTime.find(':'));
+    auto now = std::chrono::system_clock::now();
+    auto zt = std::chrono::zoned_time(std::chrono::current_zone(), now);
+    currentDate_ = std::format("{:%Y-%m-%d}", zt);
+    std::string fileName = std::format("{}_{:%Y-%m-%d_%H-%M}.log", basePathAndName_, zt);
     
-    std::string fileName = VHGlobalFormat(basePathAndName_, "_", timeForFileName, ".log");
     file_.open(fileName, std::ios::app);
     if (!file_) {
-        std::cerr << "Failed to open/create log file: " << fileName << '\n';
+        std::println("Failed to open/create log file: {}", fileName);
     }
 }
 
@@ -271,10 +274,21 @@ void VHLogger::log(VHLogLevel level, const std::string& message) {
 }
 
 void VHLogger::writeToDestination(VHLogLevel level, const std::string& message) {
-    
-    std::string timestamp = getCurrentDateTime();
-    std::string levelString = levelToString(level);
-    std::string composedMessage = VHGlobalFormat("[", timestamp, "] [", levelString, "] ", message, "\n");
+   
+    bool needsTcp = false;
+    auto now = std::chrono::system_clock::now();
+    auto nowSec = std::chrono::floor<std::chrono::seconds>(now);
+    auto zt = std::chrono::zoned_time(std::chrono::current_zone(), nowSec);
+
+    static constexpr const char* levels[] = {
+        "DEBUG", "INFO", "WARNING", "ERROR", "FATAL", "UNKNOWN"
+    };
+
+    const char* levelString = levels[std::min(static_cast<int>(level), 5)];
+    std::string composedMessage = std::format("[{:%Y-%m-%d_%H-%M:%S}] [{}] {}\n",
+                                             zt, 
+                                             levelString, 
+                                             message);
     
     for (const auto& sinkType : sinkTypes_) {
         switch ((int)sinkType) {
@@ -283,8 +297,8 @@ void VHLogger::writeToDestination(VHLogLevel level, const std::string& message) 
                     std::lock_guard<std::mutex> fileLock(fileMutex_);
                     if (file_ && file_.is_open()) {
                         file_ << composedMessage;
-                        currentSize_ += (composedMessage.size() + 1);
-                        unflushedBytes_ += (composedMessage.size() + 1);
+                        currentSize_ += composedMessage.size();
+                        unflushedBytes_ += composedMessage.size();
                         bool bShouldFlush = false;
                         if (unflushedBytes_ >= FLUSH_THRESHOLD) {
                             bShouldFlush = true;
@@ -292,7 +306,7 @@ void VHLogger::writeToDestination(VHLogLevel level, const std::string& message) 
                         else if (level == VHLogLevel::FATALLV || level == VHLogLevel::ERRORLV) {
                             bShouldFlush = true;
                         }
-                        else if (shouldRotate(composedMessage.size() + 1)) {
+                        else if (shouldRotate(composedMessage.size())) {
                             bShouldFlush = true;
                             rotateFileSink();
                         }
@@ -304,67 +318,38 @@ void VHLogger::writeToDestination(VHLogLevel level, const std::string& message) 
                 }
                 break;
             case (int)VHLogSinkType::ConsoleSink:
-                std::cout << composedMessage << '\n';
+                std::print("{}", composedMessage);
                 break;
             case (int)VHLogSinkType::NullSink:
                 break;
             case (int)VHLogSinkType::TCPSink:
-#ifdef USE_ASIO
-                if (!shutdownSocket_) {
-                    std::string msgCopy = composedMessage;
-                    asio::post(ioContext_, [this, msg = std::move(msgCopy) ]() {
-                        if (!shutdownSocket_) {
-                            tcpMessageQueue_.push_back(std::move(msg));
-                            if (!tcpIsSending_) {
-                                sendNextTCPMessage();
-                            }
-                        }
-                    });
-                }
-#endif
+                needsTcp = true;
                 break;
         }
     }
-}
-
-std::string VHLogger::getCurrentDateTime() {
-    auto now = std::chrono::system_clock::now();
-    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-    std::tm tm{};
-#ifdef _WIN32
-    localtime_s(&now_c, &tm):
-#else
-    localtime_r(&now_c, &tm);
-#endif
-    char buffer[20];
-    std::strftime(buffer, sizeof(buffer), "%Y-%m-%d_%H-%M:%S", &tm);
-    return buffer;
-}
-
-std::string VHLogger::levelToString(VHLogLevel level) {
-    switch (level) {
-        case VHLogLevel::DEBUGLV:
-            return "DEBUG";
-        case VHLogLevel::INFOLV:
-            return "INFO";
-        case VHLogLevel::ERRORLV:
-            return "ERROR";
-        case VHLogLevel::WARNINGLV:
-            return "WARNING";
-        case VHLogLevel::FATALLV:
-            return "FATAL";
-        default:
-            return "UNKNOWN";
+#ifdef USE_ASIO
+    if (needsTcp) {
+        if (!shutdownSocket_) {
+            std::string tcpMessage = composedMessage;
+            asio::post(ioContext_, [this, msg = std::move(tcpMessage) ]() mutable {
+                if (!shutdownSocket_) {
+                    tcpMessageQueue_.push_back(std::move(msg));
+                    if (!tcpIsSending_) {
+                        sendNextTCPMessage();
+                    }
+                }
+            });
+        }
     }
-    return "UNKNOWN";
+#endif
 }
 
 bool VHLogger::shouldRotate(std::size_t messageSize) {
     if (currentSize_ + messageSize > maxSize_) {
         return true;
     }
-    std::string currentDateTime = getCurrentDateTime();
-    std::string currentDate = currentDateTime.substr(0, currentDateTime.find('_'));
+    auto now = std::chrono::system_clock::now();
+    std::string currentDate = std::format("{:%Y-%m-%d}", now);
     
     if (currentDate != currentDate_) {
         return true;
@@ -408,6 +393,9 @@ void VHLogger::connectTCPSink() {
     
     asio::async_connect(socket_, endpoints, 
         [this](std::error_code ec, asio::ip::tcp::endpoint endpoint) {
+            if (shutdownSocket_.load(std::memory_order_acquire)) { 
+                return;
+            }
             if (!ec) {
                 std::lock_guard<std::mutex> lock(socketMutex_);
                 socketConnected_ = true;

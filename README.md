@@ -1,5 +1,5 @@
 # VHLog
-VHLog is a lightweight alternative to other C++ Async Log libraries.
+VHLog is a lightweight C++ 23 async log library.
 
 ### Cloning VHLog
 You can clone the repository as usual with one the following commands (CodeBerg is preferable):
@@ -91,9 +91,8 @@ Up to this point, VHLog has a console sink, a rotating file sink, a TCP sink and
 ### Log levels
 The available log levels are DEBUG, INFO, WARNING, ERROR, FATAL. Debug level messages can be filtered out by passing a boolean with value false onto the VHLogger constructor. The default constructor has it set to true, so debug level messages are active by default.
 
-### Next steps
-- Add other log sinks (UDP, SysLog...).
-- String formatting optimization.
+### Next plans
+- Add support to gRPC, OPC UA, MQTT and Grafana.
 
 ### VHLog Name
 VHLog is named after Vladimir Herzog, a brazilian journalist murdered by the military dictatorship in the year of 1975.

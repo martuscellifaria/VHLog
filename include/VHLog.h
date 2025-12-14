@@ -16,32 +16,6 @@
 #include "asio.hpp"
 #endif
 
-template<typename... Args>
-std::string VHGlobalFormat(Args&&... args) {
-    std::string result;
-    result.reserve(64*sizeof...(args));
-    auto append = [&result](auto&& arg) {
-        using T = std::decay_t<decltype(arg)>;
-
-        if constexpr (std::is_arithmetic_v<T>) {
-            result += std::to_string(arg);
-        }
-        else if constexpr (std::is_same_v<T, std::string>) {
-            result += arg;
-        }
-        else if constexpr (std::is_same_v<T, const char*> || std::is_same_v<T, char[]>) {
-            result += arg;
-        }
-        else {
-            result += std::to_string(arg);
-        }
-    };
-
-    (append(std::forward<Args>(args)), ...);
-
-    return result;
-}
-
 enum class VHLogLevel {
     DEBUGLV,
     INFOLV,
@@ -80,9 +54,6 @@ public:
 private:
     void writeToDestination(VHLogLevel level, const std::string& message);
     void appendNewSink(VHLogSinkType newSink) { sinkTypes_.insert(newSink); }
-    
-    std::string getCurrentDateTime();
-    std::string levelToString(VHLogLevel level);
     bool shouldRotate(std::size_t messageSize);
     void rotateFileSink();
 
