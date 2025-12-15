@@ -36,7 +36,6 @@ void init_results_file() {
         return;
     }
     
-    // Write header with timestamp
     auto now = std::chrono::system_clock::now();
     std::time_t t = std::chrono::system_clock::to_time_t(now);
     g_results_file << "==============================================================\n";
@@ -72,7 +71,6 @@ void print_summary() {
     g_results_file << "SUMMARY (Sorted by Performance)\n";
     g_results_file << "==============================================================\n";
     
-    // Sort by performance (highest first)
     std::sort(g_results.begin(), g_results.end(), 
               [](const BenchmarkResult& a, const BenchmarkResult& b) {
                   return a.messages_per_second > b.messages_per_second;
@@ -204,7 +202,6 @@ void bench_single_threaded(int iters) {
         bench(iters, multi_st, "File+Console (ST)", 1, "File + Console");
     }
 
-    // Null sink
     {
         VHLogger null_st(false, 100);
         null_st.addNullSink();
