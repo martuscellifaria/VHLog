@@ -1,5 +1,5 @@
 mkdir build
 cd build
-cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DUSE_ASIO=OFF
+cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DUSE_ASIO=OFF -DVHLOG_BENCHMARK=OFF
 ninja
 ln -sf build/compile_commands.json ../
